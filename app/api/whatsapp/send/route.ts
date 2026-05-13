@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { buildTemplatePayload } from '@/lib/wa-template-payload'
+import { resolveSendMediaUrl } from '@/lib/wa-media-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,14 +49,12 @@ export async function POST(req: Request) {
       where: { metaName: templateName },
     })
 
-    // headerImageUrl param wins (explicit override). Otherwise prefer the
-    // template's send-time public URL, falling back to headerMediaUrl only
-    // if that's an https URL (not a Meta resumable handle).
-    const sendMediaUrl =
-      dbTemplate?.headerMediaSendUrl ||
-      (dbTemplate?.headerMediaUrl?.startsWith('http')
-        ? dbTemplate.headerMediaUrl
-        : null)
+    // headerImageUrl param wins (explicit override). Otherwise resolve
+    // the template's send-time media URL — rejecting both resumable
+    // handles and Meta's own non-refetchable CDN URLs.
+    const sendMediaUrl = dbTemplate
+      ? resolveSendMediaUrl(dbTemplate)
+      : null
 
     const payload = buildTemplatePayload(
       to,

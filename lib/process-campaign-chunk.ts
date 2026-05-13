@@ -1,5 +1,6 @@
 import { db } from './db'
 import { buildTemplatePayload } from './wa-template-payload'
+import { resolveSendMediaUrl } from './wa-media-url'
 
 const CHUNK_SIZE = 15
 
@@ -132,14 +133,13 @@ export async function processCampaignChunk(
 
       // For sending, prefer the publicly-accessible URL. The Meta
       // resumable handle stored in headerMediaUrl can't be used as `link`
-      // at send time — Meta returns error 132012.
-      const sendMediaUrl =
-        template.headerMediaSendUrl ||
-        // Fall back to headerMediaUrl only if it looks like an https URL
-        // (not a "4::..." resumable handle).
-        (template.headerMediaUrl?.startsWith('http')
-          ? template.headerMediaUrl
-          : null)
+      // at send time, and neither can Meta's own scontent.whatsapp.net /
+      // *.fbcdn.net preview URLs (Meta returns "Media upload error"
+      // when asked to refetch from its own CDN). resolveSendMediaUrl
+      // filters both classes out and returns null if no usable URL
+      // exists — in that case we send the message text-only rather than
+      // failing the whole delivery.
+      const sendMediaUrl = resolveSendMediaUrl(template)
 
       const payload = buildTemplatePayload(
         fullPhone,
