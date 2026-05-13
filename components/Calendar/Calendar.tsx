@@ -139,7 +139,7 @@ const Calendar = ({ days, closedDays, appointments, city }: CalendarProps) => {
       });
       router.push(booking);
     }
-  }, [date.dateTime, router]);
+  }, [date.dateTime, router, city]);
 
   // console.log("the just date is ", date.justDate);
 

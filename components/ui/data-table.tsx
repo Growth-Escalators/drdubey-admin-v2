@@ -136,16 +136,22 @@ const DataTable = forwardRef<DataTableRef<any>, DataTableProps<any, any>>(({
     }
   }));
 
-  // Add this effect to handle selection changes
+  // Keep the latest onSelectionChange in a ref so the effect below can
+  // call it without listing it as a dep — parents often pass an inline
+  // arrow function which would otherwise change every render and re-fire
+  // the effect on every render, defeating the rowSelection-based gating.
+  const onSelectionChangeRef = React.useRef(onSelectionChange);
   React.useEffect(() => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows;
-    const allRows = table.getFilteredRowModel().rows;
-    const selectedCount = selectedRows.length;
-    const isAllSelected = selectedCount === allRows.length;
+    onSelectionChangeRef.current = onSelectionChange;
+  });
 
-    // Update the UI to show selection info
-    onSelectionChange?.(selectedCount);
-  }, [table.getState().rowSelection]);
+  // The `rowSelection` useState above is what react-table mutates when a
+  // row is checked, so depending on it is the right signal — and it's a
+  // simple identifier the linter can statically verify.
+  React.useEffect(() => {
+    const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+    onSelectionChangeRef.current?.(selectedCount);
+  }, [rowSelection, table]);
 
   return (
     <div className="space-y-4">

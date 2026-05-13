@@ -313,12 +313,11 @@ export const BillboardClient: React.FC<BillboardClientProps> = ({
 
   const selectedTemplate = waTemplates.find(t => t.id === campaignForm.templateId);
 
-  useEffect(() => {
-    const count = tableRef.current?.getSelectedData()?.length || 0;
-    setSelectedCount(count);
-  }, [tableRef.current?.getSelectedData()]);
-
- 
+  // Selection count is kept in sync via the DataTable's onSelectionChange
+  // prop (wired below), so no useEffect is needed here. A previous version
+  // had an effect that depended on `tableRef.current?.getSelectedData()` —
+  // a function call result, not a stable reference — which never triggered
+  // a re-run anyway. Removed because it was dead + linter-flagged.
 
   const prepareExportData = (exportType: 'all' | 'current' | 'selected' | 'filtered') => {
     let exportData: LeadCloumn[] = [];

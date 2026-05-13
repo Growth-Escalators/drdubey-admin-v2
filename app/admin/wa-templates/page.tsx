@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   parseButtonsJson,
@@ -1209,7 +1209,10 @@ export default function WATemplatesPage() {
   const [editingTemplate, setEditingTemplate] =
     useState<WATemplate | null>(null)
 
-  const fetchTemplates = async () => {
+  // useCallback so the polling effect below can list this in its deps
+  // without re-firing on every render (which would tear down + re-create
+  // the setInterval each render).
+  const fetchTemplates = useCallback(async () => {
     setLoading(true)
     try {
       const [newRes, legacyRes] = await Promise.all([
@@ -1253,17 +1256,24 @@ export default function WATemplatesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchTemplates()
-  }, [])
+  }, [fetchTemplates])
+
+  // List of templates currently PENDING Meta review, memoized so the
+  // polling effect below only re-fires when this list actually changes.
+  // Previously a complex expression sat directly in the dep array, which
+  // the linter flagged because it can't statically check what triggers
+  // a re-run.
+  const pendingTemplates = useMemo(
+    () => templates.filter(t => t.source === 'new' && t.metaStatus === 'PENDING'),
+    [templates],
+  )
 
   // Auto-poll PENDING templates every 60 seconds for 5 minutes
   useEffect(() => {
-    const pendingTemplates = templates.filter(
-      t => t.source === 'new' && t.metaStatus === 'PENDING'
-    )
     if (pendingTemplates.length === 0) return
 
     const interval = setInterval(async () => {
@@ -1292,7 +1302,7 @@ export default function WATemplatesPage() {
       clearInterval(interval)
       clearTimeout(timeout)
     }
-  }, [templates.filter(t => t.metaStatus === 'PENDING').map(t => t.id).join(',')])
+  }, [pendingTemplates, fetchTemplates])
 
   const filtered = templates.filter(t => {
     if (t.source === 'legacy') {
