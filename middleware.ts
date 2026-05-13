@@ -7,6 +7,6 @@ export const config = {
   //   request self-fetches from /api/campaigns/send-now can reach it
   // - api/cron: Vercel-scheduled crons; protect via CRON_SECRET inside route
   matcher: [
-    '/((?!api/auth|api/campaigns/send-chunk|api/cron|api/whatsapp/webhook|api/wa-media|sign-in|_next/static|_next/image|favicon.ico|images/wa-headers).*)',
+    '/((?!api/auth|api/campaigns/send-chunk|api/cron|api/whatsapp/webhook|sign-in|_next/static|_next/image|favicon.ico|images/wa-headers).*)',
   ],
 }

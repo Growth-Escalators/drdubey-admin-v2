@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server'
-import { uploadToR2, publicUrlFor } from '@/lib/r2-upload'
+import { put } from '@vercel/blob'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Meta WhatsApp Cloud API send-time limits, matched here so the user
-// gets a clear client-side error rather than a Meta-side rejection on
-// the first send.
+// Vercel Blob upload for WhatsApp template header media.
+//
+// Why Vercel Blob:
+// - Free tier covers our usage (1 GB storage, 50 GB egress / month).
+// - Single env var (BLOB_READ_WRITE_TOKEN) auto-provisioned when the
+//   Blob store is connected in the Vercel dashboard.
+// - put() returns a public URL directly — no proxy route needed.
+// - Files served from a public CDN domain Meta can fetch.
+//
+// Limits match Meta's WhatsApp Cloud API send-time limits.
 const ALLOWED = {
   IMAGE:    { types: ['image/jpeg', 'image/png'],                      max: 5 * 1024 * 1024 },
   VIDEO:    { types: ['video/mp4', 'video/3gpp'],                      max: 16 * 1024 * 1024 },
@@ -16,7 +23,7 @@ const ALLOWED = {
 
 type Format = keyof typeof ALLOWED
 
-function sanitizeName(name: string) {
+function sanitizeName(name: string): string {
   const dot = name.lastIndexOf('.')
   const stem = (dot > 0 ? name.slice(0, dot) : name)
     .replace(/[^a-zA-Z0-9-_]+/g, '-')
@@ -53,19 +60,24 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json({
+        error:
+          'Vercel Blob is not connected. In Vercel dashboard go to ' +
+          'Storage → Create → Blob → connect to this project, then redeploy.',
+      }, { status: 500 })
+    }
+
     const key = `wa-headers/${Date.now()}-${sanitizeName(file.name)}`
-    await uploadToR2(buffer, key, file.type)
+    const blob = await put(key, file, {
+      access: 'public',
+      contentType: file.type,
+      // Random suffix off — we already prefix the timestamp ourselves,
+      // and a deterministic path is easier to debug.
+      addRandomSuffix: false,
+    })
 
-    // Construct the public URL using our own host so Meta fetches the
-    // file via the /api/wa-media proxy route below. Avoids requiring a
-    // public R2 bucket / custom domain.
-    const origin =
-      process.env.NEXTAUTH_URL ||
-      (req.headers.get('host') ? `https://${req.headers.get('host')}` : '')
-    const url = publicUrlFor(key, origin)
-
-    return NextResponse.json({ url, key, size: file.size })
+    return NextResponse.json({ url: blob.url, key, size: file.size })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Upload failed'
     console.error('[WA_TEMPLATE_MEDIA_UPLOAD]', e)
