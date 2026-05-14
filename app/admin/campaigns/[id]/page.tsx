@@ -68,7 +68,6 @@ export default function CampaignDetailPage() {
           setLoading(false)
           // Keep polling even after the send completes — webhook callbacks
           // for delivered / read continue trickling in for up to a day.
-          // Slow down once the campaign is no longer actively sending.
         })
         .catch(() => { if (!cancelled) setLoading(false) })
     }
@@ -81,6 +80,22 @@ export default function CampaignDetailPage() {
       if (intervalId) clearInterval(intervalId)
     }
   }, [params.id])
+
+  // Client-side chain driver: while the campaign is SENDING, poke the
+  // server every 15s to fire another send-chunk. Vercel Hobby's
+  // serverless shutdown behavior was killing the server-side chain
+  // after 4-5 iterations; the client-side poke loop guarantees forward
+  // progress as long as someone has this page open.
+  useEffect(() => {
+    if (campaign?.status !== 'SENDING') return
+    const poke = () => {
+      fetch(`/api/campaigns/${params.id}/poke`, { method: 'POST' })
+        .catch(() => {})
+    }
+    poke() // fire one immediately
+    const t = setInterval(poke, 15000)
+    return () => clearInterval(t)
+  }, [campaign?.status, params.id])
 
   if (loading) {
     return <div style={{ padding: '24px', color: '#94a3b8' }}>Loading campaign...</div>
