@@ -2,14 +2,15 @@ import { db } from './db'
 import { buildTemplatePayload } from './wa-template-payload'
 import { resolveSendMediaUrl } from './wa-media-url'
 
-// Chunk size is small on purpose. Vercel Hobby caps function execution at
-// 10 seconds. Each iteration in the for-loop below makes one Meta /messages
-// call (typically 700ms–2.5s, longer for marketing templates that get
-// throttled) plus a DB write. With CHUNK_SIZE = 4 a chunk runs in ~6–8s,
-// leaving headroom for the recursive self-fetch that chains the next chunk.
-// Previously this was 15, which silently 504'd on Vercel and killed the
-// chain — campaigns would stop at ~4 messages and never resume.
-const CHUNK_SIZE = 4
+// Chunk size measured against real production timings: Meta's marketing
+// template /messages call is averaging ~3.9s/patient when the recipient
+// hits rate-limit checks ("not delivered to maintain healthy ecosystem
+// engagement"). Vercel Hobby kills the function at 10s. At CHUNK_SIZE = 2
+// a chunk runs ~7-8s on the slow path with ~2s headroom for the recursive
+// next-chunk dispatch. CHUNK_SIZE = 4 was tried but reliably 504'd. The
+// trade-off is a longer wall-clock per campaign (276 patients ≈ 18 min)
+// in exchange for the chain actually completing.
+const CHUNK_SIZE = 2
 
 export interface ProcessChunkResult {
   done: boolean
