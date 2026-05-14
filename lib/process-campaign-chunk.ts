@@ -2,15 +2,15 @@ import { db } from './db'
 import { buildTemplatePayload } from './wa-template-payload'
 import { resolveSendMediaUrl } from './wa-media-url'
 
-// Chunk size measured against real production timings: Meta's marketing
-// template /messages call is averaging ~3.9s/patient when the recipient
-// hits rate-limit checks ("not delivered to maintain healthy ecosystem
-// engagement"). Vercel Hobby kills the function at 10s. At CHUNK_SIZE = 2
-// a chunk runs ~7-8s on the slow path with ~2s headroom for the recursive
-// next-chunk dispatch. CHUNK_SIZE = 4 was tried but reliably 504'd. The
-// trade-off is a longer wall-clock per campaign (276 patients ≈ 18 min)
-// in exchange for the chain actually completing.
-const CHUNK_SIZE = 2
+// One patient per chunk. Earlier attempts at 15/4/2 all hit Vercel's
+// 10s function cap because Meta's API itself takes 3-4 seconds per
+// call when the recipient is being throttled (returns 200 but takes
+// time validating). At CHUNK_SIZE = 1 each invocation runs ~4s total
+// (Meta call + DB writes + continuation dispatch), well under the 10s
+// limit, so the recursive next-chunk fetch reliably fires. Throughput
+// becomes ~4-5s per patient — slower per-message but the chain actually
+// completes, which is what matters.
+const CHUNK_SIZE = 1
 
 export interface ProcessChunkResult {
   done: boolean

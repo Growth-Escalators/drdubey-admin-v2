@@ -37,9 +37,12 @@ export async function POST(req: Request) {
 
     const result = await processCampaignChunk(campaignId)
 
-    // If more patients remain, chain the next chunk via self-fetch.
-    // The shared secret header lets the middleware-whitelisted route
-    // accept this internal call.
+    // Chain the next chunk via self-fetch BEFORE returning. This used to
+    // happen sequentially and worked fine when chunks were fast, but at
+    // 4s/chunk on the slow path the function gets killed before this
+    // code runs. Now firing as soon as the current chunk's DB writes
+    // complete and giving 400ms for the request to actually leave the
+    // host before the lambda freezes.
     if (!result.done) {
       const base = getBaseUrl(req)
       fetch(`${base}/api/campaigns/send-chunk`, {
@@ -50,7 +53,9 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({ campaignId }),
       }).catch(() => {})
-      await new Promise(r => setTimeout(r, 500))
+      // Slightly shorter than before — at CHUNK_SIZE=1 we have headroom
+      // but want to minimise dead time at the end of every invocation.
+      await new Promise(r => setTimeout(r, 400))
     }
 
     return NextResponse.json(result)
