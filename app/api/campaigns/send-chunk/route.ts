@@ -37,25 +37,31 @@ export async function POST(req: Request) {
 
     const result = await processCampaignChunk(campaignId)
 
-    // Chain the next chunk via self-fetch BEFORE returning. This used to
-    // happen sequentially and worked fine when chunks were fast, but at
-    // 4s/chunk on the slow path the function gets killed before this
-    // code runs. Now firing as soon as the current chunk's DB writes
-    // complete and giving 400ms for the request to actually leave the
-    // host before the lambda freezes.
+    // Fire the next chunk. The chain was previously dying after 4-5 hops
+    // because the fire-and-forget fetch wasn't fully on the wire before
+    // Vercel killed the lambda. Two changes here:
+    //   - keepalive: true — hints Node to complete the request even if
+    //     the calling context shuts down.
+    //   - 2-second wait after dispatch — gives the request enough time
+    //     to be acknowledged by the target host. We don't await the
+    //     full response (that would extend our duration) — just race
+    //     against a hard timeout.
     if (!result.done) {
       const base = getBaseUrl(req)
-      fetch(`${base}/api/campaigns/send-chunk`, {
+      const dispatch = fetch(`${base}/api/campaigns/send-chunk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${process.env.CAMPAIGN_INTERNAL_SECRET}`,
         },
         body: JSON.stringify({ campaignId }),
-      }).catch(() => {})
-      // Slightly shorter than before — at CHUNK_SIZE=1 we have headroom
-      // but want to minimise dead time at the end of every invocation.
-      await new Promise(r => setTimeout(r, 400))
+        keepalive: true,
+      } as RequestInit).catch(() => {})
+
+      await Promise.race([
+        dispatch,
+        new Promise(r => setTimeout(r, 2000)),
+      ])
     }
 
     return NextResponse.json(result)
