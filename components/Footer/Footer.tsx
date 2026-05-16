@@ -3,6 +3,7 @@ import React from "react";
 
 import { YoutubeIcon, FacebookIcon, InstagramIcon } from "lucide-react";
 import Image from "next/image";
+import { getWhatsAppBookingUrl } from "@/lib/whatsapp-booking";
 
 type Props = {};
 
@@ -35,9 +36,14 @@ const Footer = (props: Props) => {
               </div>
               <ul className="leading-8">
                 <li>
-                  <Link href="/booking" className="hover:text-primary">
+                  <a
+                    href={getWhatsAppBookingUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-primary"
+                  >
                     Book Appointment
-                  </Link>
+                  </a>
                 </li>
                 <li>
                   <Link href="/about" className="hover:text-primary">

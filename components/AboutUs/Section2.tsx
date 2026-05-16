@@ -37,12 +37,6 @@ const Section2 = (props: Props) => {
                 successful Joint Replacement Surgeries. Record of 17 joint
                 replacement surgeries in a day in Rajasthan.
               </p>
-              <a
-                href="#"
-                className="px-4 py-3 text-gray-100 uppercase transition-all transform bg-primary rounded hover:bg-cyan-500 dark:hover:bg-cyan-500 dark:hover:text-gray-50 dark:text-gray-100 hover:text-gray-100"
-              >
-                Know More
-              </a>
             </div>
             <div className="w-full px-4 mb-10 lg:w-1/2 lg:mb-0">
               <div className="relative">
