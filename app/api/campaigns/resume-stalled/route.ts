@@ -15,7 +15,18 @@ function getBaseUrl(req: Request): string {
   return `${proto}://${host}`
 }
 
+function isInternalCallAuthorized(req: Request): boolean {
+  const secret = process.env.CAMPAIGN_INTERNAL_SECRET
+  if (!secret) return false
+  const auth = req.headers.get('authorization') || ''
+  return auth === `Bearer ${secret}`
+}
+
 export async function POST(req: Request) {
+  if (!isInternalCallAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const cutoff = new Date(Date.now() - STALL_THRESHOLD_MS)
     const stalled = await db.campaign.findMany({
