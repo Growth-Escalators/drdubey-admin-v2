@@ -31,13 +31,31 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/campaigns')
-      .then(r => r.json())
-      .then(data => {
-        setCampaigns(Array.isArray(data) ? data : [])
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+    const load = () =>
+      fetch('/api/campaigns')
+        .then(r => r.json())
+        .then(data => {
+          setCampaigns(Array.isArray(data) ? data : [])
+          setLoading(false)
+        })
+        .catch(() => setLoading(false))
+    load()
+    const refresh = setInterval(load, 30000)
+    return () => clearInterval(refresh)
+  }, [])
+
+  // Browser-driven scheduler. Vercel Hobby only allows one cron/day, so
+  // scheduled campaigns can't fire on time via cron alone. While this page
+  // is open, hit /api/campaigns/tick every 60s — it transitions any due
+  // SCHEDULED campaign to SENDING and fires send-chunk for it. Cron-daily
+  // remains the safety net for when no admin tab is open.
+  useEffect(() => {
+    const tick = () => {
+      fetch('/api/campaigns/tick', { method: 'POST' }).catch(() => {})
+    }
+    tick()
+    const t = setInterval(tick, 60000)
+    return () => clearInterval(t)
   }, [])
 
   const cancelCampaign = async (id: string) => {

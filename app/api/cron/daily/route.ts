@@ -4,10 +4,15 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: Request) {
   const base = process.env.NEXTAUTH_URL ||
     'https://admin.drdubay.in'
+  const secret = process.env.CAMPAIGN_INTERNAL_SECRET
+  const authHeaders: Record<string, string> = secret
+    ? { Authorization: `Bearer ${secret}` }
+    : {}
 
   const [campaigns, reviews, resumed] = await Promise.all([
-    fetch(`${base}/api/campaigns/send`, {
-      method: 'POST'
+    fetch(`${base}/api/campaigns/run-scheduled`, {
+      method: 'POST',
+      headers: authHeaders,
     }).then(r => r.json()).catch(e => ({
       error: e.message
     })),
@@ -17,7 +22,8 @@ export async function GET(req: Request) {
       error: e.message
     })),
     fetch(`${base}/api/campaigns/resume-stalled`, {
-      method: 'POST'
+      method: 'POST',
+      headers: authHeaders,
     }).then(r => r.json()).catch(e => ({
       error: e.message
     })),
