@@ -77,10 +77,18 @@ export async function POST(req: Request) {
     const resumed: string[] = []
 
     for (const c of due) {
-      await db.campaign.update({
-        where: { id: c.id },
+      // Atomic claim: only transition this campaign if it's still SCHEDULED.
+      // Without this guard, /api/campaigns/tick (browser, every 30s) and
+      // /api/campaigns/pulse (cron-job.org, every 60s) can both observe the
+      // same SCHEDULED row in their parallel findMany above, both flip it
+      // to SENDING, and both dispatch send-chunk — patient receives the
+      // message twice. updateMany returning count=0 means another runner
+      // claimed it first; we skip dispatching.
+      const claim = await db.campaign.updateMany({
+        where: { id: c.id, status: 'SCHEDULED' },
         data: { status: 'SENDING' },
       })
+      if (claim.count === 0) continue
 
       fetch(`${base}/api/campaigns/send-chunk`, {
         method: 'POST',
@@ -95,10 +103,22 @@ export async function POST(req: Request) {
       triggered.push(c.id)
     }
 
-    // Re-poke stalled SENDING campaigns. We don't change their status —
-    // they're already SENDING. processCampaignChunk dedupes against
-    // CampaignLog so any patient already attempted is skipped.
+    // Re-poke stalled SENDING campaigns. Same race risk as above — two
+    // pingers can both find the same stalled row and both fire send-chunk.
+    // Claim by bumping updatedAt only if still in the stalled window;
+    // Prisma's @updatedAt auto-refreshes on update, so a no-op status
+    // write moves the row out of the stalled bucket for ~60s.
     for (const c of stalled) {
+      const claim = await db.campaign.updateMany({
+        where: {
+          id: c.id,
+          status: 'SENDING',
+          updatedAt: { lt: stalledCutoff },
+        },
+        data: { status: 'SENDING' },
+      })
+      if (claim.count === 0) continue
+
       fetch(`${base}/api/campaigns/send-chunk`, {
         method: 'POST',
         headers: {

@@ -72,10 +72,14 @@ async function runPulse(req: Request) {
   const resumed: string[] = []
 
   for (const c of due) {
-    await db.campaign.update({
-      where: { id: c.id },
+    // Atomic claim: see comment in /api/campaigns/tick. Without this,
+    // a tick+pulse fire within ~ms of each other and the patient gets
+    // two messages.
+    const claim = await db.campaign.updateMany({
+      where: { id: c.id, status: 'SCHEDULED' },
       data: { status: 'SENDING' },
     })
+    if (claim.count === 0) continue
 
     fetch(`${base}/api/campaigns/send-chunk`, {
       method: 'POST',
@@ -91,6 +95,20 @@ async function runPulse(req: Request) {
   }
 
   for (const c of stalled) {
+    // Same atomic-claim pattern for stalled re-poke. Bumping updatedAt
+    // (via a same-value status write) only succeeds if the row is still
+    // older than the cutoff — concurrent pingers see updatedAt fresh and
+    // skip the dispatch.
+    const claim = await db.campaign.updateMany({
+      where: {
+        id: c.id,
+        status: 'SENDING',
+        updatedAt: { lt: stalledCutoff },
+      },
+      data: { status: 'SENDING' },
+    })
+    if (claim.count === 0) continue
+
     fetch(`${base}/api/campaigns/send-chunk`, {
       method: 'POST',
       headers: {

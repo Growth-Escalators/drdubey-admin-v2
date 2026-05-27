@@ -39,7 +39,24 @@ export async function POST(req: Request) {
 
     const secret = process.env.CAMPAIGN_INTERNAL_SECRET
     const base = getBaseUrl(req)
+    let dispatched = 0
     for (const c of stalled) {
+      // Atomic claim: only re-poke if still in the stalled window. Without
+      // this, daily cron + browser tick + cron-job.org pulse can all find
+      // the same stalled campaign and all fire send-chunk → patient gets
+      // multiple sends. updateMany with the cutoff guard moves the row out
+      // of the stalled bucket via Prisma's @updatedAt; concurrent runners
+      // see the refreshed row and skip.
+      const claim = await db.campaign.updateMany({
+        where: {
+          id: c.id,
+          status: 'SENDING',
+          updatedAt: { lt: cutoff },
+        },
+        data: { status: 'SENDING' },
+      })
+      if (claim.count === 0) continue
+
       fetch(`${base}/api/campaigns/send-chunk`, {
         method: 'POST',
         headers: {
@@ -48,9 +65,10 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({ campaignId: c.id }),
       }).catch(() => {})
+      dispatched++
     }
 
-    return NextResponse.json({ resumed: stalled.length })
+    return NextResponse.json({ resumed: dispatched })
   } catch (e: any) {
     console.error('[RESUME_STALLED]', e)
     return NextResponse.json({ error: e.message }, { status: 500 })

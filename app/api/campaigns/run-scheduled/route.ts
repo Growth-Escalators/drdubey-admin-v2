@@ -51,10 +51,15 @@ export async function POST(req: Request) {
     const triggered: string[] = []
 
     for (const c of dueCampaigns) {
-      await db.campaign.update({
-        where: { id: c.id },
+      // Atomic claim: see /api/campaigns/tick and /api/campaigns/pulse.
+      // Daily Vercel cron, browser tick, and external pulse all converge
+      // on this transition — without the status guard the same campaign
+      // can be claimed twice and dispatched twice.
+      const claim = await db.campaign.updateMany({
+        where: { id: c.id, status: 'SCHEDULED' },
         data: { status: 'SENDING' },
       })
+      if (claim.count === 0) continue
 
       const dispatch = fetch(`${base}/api/campaigns/send-chunk`, {
         method: 'POST',
