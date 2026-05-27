@@ -30,13 +30,22 @@ export default function NewDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/dashboard/stats")
-      .then((r) => r.json())
-      .then((data) => {
-        setStats(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+    // Initial fetch + refresh every 60s. Previously fetched once on mount
+    // and never again, so dashboard stats (patient count, follow-ups due,
+    // recent contacts) stayed stale until a manual page reload. 60s matches
+    // the cache window on /api/dashboard/stats (see route.ts revalidate),
+    // so the client and server stay in sync.
+    const load = () =>
+      fetch("/api/dashboard/stats")
+        .then((r) => r.json())
+        .then((data) => {
+          setStats(data);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    load();
+    const interval = setInterval(load, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const statCards = [

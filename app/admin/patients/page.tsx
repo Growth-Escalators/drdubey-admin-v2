@@ -10,10 +10,14 @@ export const dynamic = "force-dynamic";
 const BillboardsPage = async ({ params }: { params: { storeId: string } }) => {
   let billboards: any[] = [];
   try {
+    // Cap at 200 most recent patients. The page renders this as a client-side
+    // DataGrid that filters/searches in JS — loading 5000+ rows freezes the
+    // browser for several seconds AND has no UI to scroll past the visible
+    // window anyway. A real paginated UI is a follow-up; for now this cuts
+    // the server query + initial JSON payload by ~95%.
     billboards = await db.lead.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
+      take: 200,
     });
   } catch {
     billboards = [];

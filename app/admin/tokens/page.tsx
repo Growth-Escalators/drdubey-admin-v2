@@ -39,7 +39,11 @@ export default function TokenManagementPage() {
 
   useEffect(() => {
     fetchTokens();
-    const interval = setInterval(fetchTokens, 15000);
+    // Refresh every 30s (was 15s). OPD queue updates aren't latency-critical
+    // — receptionist sees new tokens within half a minute, which matches
+    // typical patient walk-up cadence. Doubling the interval cuts request
+    // load on this page in half.
+    const interval = setInterval(fetchTokens, 30000);
     return () => clearInterval(interval);
   }, [fetchTokens]);
 

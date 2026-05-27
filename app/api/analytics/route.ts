@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
+// Analytics is aggregate stats — fine to cache for 5 min. Was force-dynamic
+// before, which made every dashboard load hit the DB with 3 separate
+// full-table scans (see groupBy refactor below).
+export const revalidate = 300;
 
 export async function GET() {
   try {
@@ -38,33 +41,33 @@ export async function GET() {
       where: { gender: "Female" },
     });
 
-    // Top cities
-    const allLeads = await db.lead.findMany({
-      select: { cities: true },
+    // Top cities — was doing findMany over the entire lead collection then
+    // counting in JS, which scanned every row and allocated O(N) JS memory.
+    // groupBy pushes the aggregation into MongoDB itself and returns just
+    // the (city, count) tuples we need.
+    const cityGroups = await db.lead.groupBy({
+      by: ["cities"],
+      _count: { _all: true },
+      where: { cities: { not: null } },
     });
-    const cityMap: Record<string, number> = {};
-    for (const l of allLeads) {
-      const c = l.cities?.trim();
-      if (c) cityMap[c] = (cityMap[c] || 0) + 1;
-    }
-    const topCities = Object.entries(cityMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
-      .map(([city, count]) => ({ city, count }));
+    const topCities = cityGroups
+      .map((g) => ({ city: (g.cities || "").trim(), count: g._count._all }))
+      .filter((g) => g.city.length > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
 
-    // Top surgeries
-    const surgeryLeads = await db.lead.findMany({
-      select: { surgery: true },
+    // Top surgeries — same pattern as topCities above. Was scanning the
+    // whole lead collection a second time; now a single grouped query.
+    const surgeryGroups = await db.lead.groupBy({
+      by: ["surgery"],
+      _count: { _all: true },
+      where: { surgery: { not: null } },
     });
-    const surgeryMap: Record<string, number> = {};
-    for (const l of surgeryLeads) {
-      const s = l.surgery?.trim();
-      if (s) surgeryMap[s] = (surgeryMap[s] || 0) + 1;
-    }
-    const topSurgeries = Object.entries(surgeryMap)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([surgery, count]) => ({ surgery, count }));
+    const topSurgeries = surgeryGroups
+      .map((g) => ({ surgery: (g.surgery || "").trim(), count: g._count._all }))
+      .filter((g) => g.surgery.length > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
 
     // Monthly trend (last 12 months)
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);

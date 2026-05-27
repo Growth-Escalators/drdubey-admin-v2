@@ -40,7 +40,11 @@ export default function CampaignsPage() {
         })
         .catch(() => setLoading(false))
     load()
-    const refresh = setInterval(load, 30000)
+    // Refresh every 60s. Was 30s, but the campaigns list is informational —
+    // status changes during SENDING are visible via campaign detail page's
+    // own polling, and a fresh list every minute is plenty for the overview.
+    // Halving the request frequency cuts DB load on this page in half.
+    const refresh = setInterval(load, 60000)
     return () => clearInterval(refresh)
   }, [])
 

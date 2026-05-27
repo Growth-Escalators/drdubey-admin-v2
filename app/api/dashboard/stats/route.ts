@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
+// Cache for 60s — counters don't need to be sub-minute fresh, and this
+// matches the dashboard component's own 60s polling interval. Was
+// force-dynamic before, which made every dashboard load run 9 queries
+// against MongoDB even when nothing had changed.
+export const revalidate = 60;
 
 export async function GET() {
   try {
