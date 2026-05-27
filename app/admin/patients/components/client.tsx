@@ -204,7 +204,13 @@ export const BillboardClient: React.FC<BillboardClientProps> = ({
   }, []);
 
   const openScheduleModal = () => {
-    const today = new Date().toISOString().split('T')[0];
+    // YYYY-MM-DD for "today in IST". Plain toISOString() returns the UTC
+    // date, so between 00:00–05:30 IST it would prefill yesterday's date.
+    // en-CA always formats as YYYY-MM-DD which matches the <input type=date>
+    // value format.
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Kolkata',
+    });
     const selectedData = tableRef.current?.getSelectedData() || [];
     const firstCity = selectedData[0]?.city || '';
     setCampaignForm({
@@ -241,9 +247,23 @@ export const BillboardClient: React.FC<BillboardClientProps> = ({
     }
     setSchedulingCampaign(true);
     try {
-      // Convert IST to UTC (IST = UTC + 5:30)
-      const istDateTime = new Date(`${campaignForm.date}T${campaignForm.time}:00`);
-      const utcDateTime = new Date(istDateTime.getTime() - (5.5 * 60 * 60 * 1000));
+      // The date/time inputs are explicitly labeled "(IST)" — the user is
+      // entering IST wall-clock, not browser-local. Build the Date by
+      // attaching the IST offset (+05:30) directly so the parsed instant
+      // is correct regardless of where the admin's browser is.
+      //
+      // Previous version did `new Date('YYYY-MM-DDTHH:mm:00').getTime() -
+      // 5.5h`. That parses the string as browser-local time, so on an IST
+      // machine the resulting UTC was already correct, and the extra 5.5h
+      // subtraction shifted the campaign 5.5 hours earlier than intended.
+      const istDateTime = new Date(
+        `${campaignForm.date}T${campaignForm.time}:00+05:30`,
+      );
+      if (isNaN(istDateTime.getTime())) {
+        alert('Invalid date or time. Please re-enter and try again.');
+        setSchedulingCampaign(false);
+        return;
+      }
       const res = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -253,7 +273,7 @@ export const BillboardClient: React.FC<BillboardClientProps> = ({
           language: campaignForm.language,
           city: campaignForm.city,
           patientIds: selectedData.map(p => p.id),
-          scheduledAt: utcDateTime.toISOString(),
+          scheduledAt: istDateTime.toISOString(),
         }),
       });
       if (res.ok) {

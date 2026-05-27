@@ -46,6 +46,7 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 const formatTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
   }) : '—'
 
@@ -201,12 +202,14 @@ export default function CampaignDetailPage() {
         display: 'flex', gap: '24px', marginBottom: '20px', fontSize: '13px', color: '#64748b',
       }}>
         <span>Scheduled: {new Date(campaign.scheduledAt).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
           day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        })}</span>
+        })} IST</span>
         {campaign.sentAt && (
           <span>Completed: {new Date(campaign.sentAt).toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
             day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-          })}</span>
+          })} IST</span>
         )}
       </div>
 

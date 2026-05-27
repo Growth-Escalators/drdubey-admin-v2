@@ -44,19 +44,9 @@ export default function CampaignsPage() {
     return () => clearInterval(refresh)
   }, [])
 
-  // Browser-driven scheduler. Vercel Hobby only allows one cron/day, so
-  // scheduled campaigns can't fire on time via cron alone. While this page
-  // is open, hit /api/campaigns/tick every 60s — it transitions any due
-  // SCHEDULED campaign to SENDING and fires send-chunk for it. Cron-daily
-  // remains the safety net for when no admin tab is open.
-  useEffect(() => {
-    const tick = () => {
-      fetch('/api/campaigns/tick', { method: 'POST' }).catch(() => {})
-    }
-    tick()
-    const t = setInterval(tick, 60000)
-    return () => clearInterval(t)
-  }, [])
+  // Note: the /api/campaigns/tick poller used to live here, but it's now
+  // run from app/admin/layout.tsx so scheduled campaigns fire and stalled
+  // SENDING campaigns recover on ANY admin page, not just this one.
 
   const cancelCampaign = async (id: string) => {
     if (!confirm('Cancel this scheduled campaign?')) return

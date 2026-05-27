@@ -42,9 +42,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Template not approved on Meta' }, { status: 400 })
     }
 
+    // Auto-generated name uses today's date in IST. Plain toISOString()
+    // returns UTC, which crosses midnight at 05:30 IST — names like
+    // "Send Now - 2026-05-25" appearing at 1 AM IST on 2026-05-26 are
+    // confusing for the admin team.
+    const istToday = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Kolkata',
+    })
     const campaign = await db.campaign.create({
       data: {
-        name: name || `Send Now - ${new Date().toISOString().slice(0, 10)}`,
+        name: name || `Send Now - ${istToday}`,
         templateId: template.id,
         language: language || 'hi',
         city: city || '',
